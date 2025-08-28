@@ -1,0 +1,385 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Module>
+    <ModulePrefs 
+        title="Executive Initiative Dashboard" 
+        author="Docupace IT" 
+        description="Real-time tracking of ROCK, SEI, and Surveillance initiatives"
+        height="800"
+        thumbnail="https://docupacellc.atlassian.net/favicon.ico">
+        <Require feature="dynamic-height"/>
+        <Require feature="views"/>
+        <Require feature="settitle"/>
+        <Require feature="oauthpopup"/>
+    </ModulePrefs>
+    
+    <Content type="html" view="canvas,default">
+    <![CDATA[
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                    margin: 0;
+                    padding: 16px;
+                    background: #f4f5f7;
+                }
+                .header {
+                    background: white;
+                    padding: 20px;
+                    border-radius: 3px;
+                    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+                    margin-bottom: 16px;
+                }
+                .metrics {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                    gap: 12px;
+                    margin-bottom: 16px;
+                }
+                .metric-card {
+                    background: white;
+                    padding: 16px;
+                    border-radius: 3px;
+                    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+                    text-align: center;
+                }
+                .metric-value {
+                    font-size: 28px;
+                    font-weight: bold;
+                    color: #172b4d;
+                }
+                .metric-label {
+                    font-size: 12px;
+                    color: #6b778c;
+                    margin-top: 4px;
+                }
+                .critical { border-left: 4px solid #ff5630; }
+                .warning { border-left: 4px solid #ffab00; }
+                .loading { text-align: center; padding: 40px; color: #6b778c; }
+                .project-section {
+                    background: white;
+                    border-radius: 3px;
+                    margin-bottom: 12px;
+                    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+                }
+                .project-header {
+                    padding: 16px;
+                    border-bottom: 1px solid #dfe1e6;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    font-weight: bold;
+                }
+                .issue-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+                .issue-table th {
+                    text-align: left;
+                    padding: 8px 16px;
+                    background: #f4f5f7;
+                    font-size: 11px;
+                    text-transform: uppercase;
+                    color: #6b778c;
+                }
+                .issue-table td {
+                    padding: 8px 16px;
+                    border-top: 1px solid #dfe1e6;
+                    font-size: 13px;
+                }
+                .issue-key {
+                    color: #0052cc;
+                    text-decoration: none;
+                    font-weight: 500;
+                }
+                .issue-key:hover { text-decoration: underline; }
+                .priority-blocker { background: #ff5630; color: white; }
+                .priority-critical { background: #ff7452; color: white; }
+                .priority-major { background: #ffab00; color: #172b4d; }
+                .priority-minor { background: #2684ff; color: white; }
+                .priority-trivial { background: #97a0af; color: white; }
+                .priority {
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                    font-size: 11px;
+                    font-weight: bold;
+                    text-transform: uppercase;
+                }
+                .status {
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                    font-size: 11px;
+                    text-transform: uppercase;
+                }
+                .status-done { background: #00875a; color: white; }
+                .status-progress { background: #0052cc; color: white; }
+                .status-open { background: #dfe1e6; color: #42526e; }
+                .alert-banner {
+                    background: #ffebe6;
+                    border: 1px solid #ff8b00;
+                    padding: 12px;
+                    border-radius: 3px;
+                    margin-bottom: 16px;
+                }
+                .alert-banner h3 { color: #bf2600; margin: 0 0 8px 0; }
+                .controls {
+                    display: flex;
+                    gap: 12px;
+                    margin-top: 12px;
+                }
+                .btn {
+                    padding: 6px 12px;
+                    background: #0052cc;
+                    color: white;
+                    border: none;
+                    border-radius: 3px;
+                    cursor: pointer;
+                    font-size: 13px;
+                }
+                .btn:hover { background: #0747a6; }
+                select {
+                    padding: 6px;
+                    border: 1px solid #dfe1e6;
+                    border-radius: 3px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h2 style="margin: 0 0 8px 0; color: #172b4d;">Executive Initiative Dashboard</h2>
+                <p style="margin: 0 0 12px 0; color: #6b778c; font-size: 14px;">
+                    Real-time tracking of ROCK, SEI, and Surveillance projects
+                </p>
+                <div class="controls">
+                    <select id="filter">
+                        <option value="all">All Projects</option>
+                        <option value="rock">ROCK (Phase 1 & 2)</option>
+                        <option value="sei">SEI Global Services</option>
+                        <option value="surveillance">Surveillance (C&C)</option>
+                    </select>
+                    <button class="btn" onclick="loadDashboard()">Refresh</button>
+                </div>
+            </div>
+
+            <div id="alerts" class="alert-banner" style="display: none;">
+                <h3>⚠️ Critical Issues Requiring Attention</h3>
+                <div id="alert-list"></div>
+            </div>
+
+            <div class="metrics">
+                <div class="metric-card">
+                    <div class="metric-value" id="total">0</div>
+                    <div class="metric-label">Total Open</div>
+                </div>
+                <div class="metric-card critical">
+                    <div class="metric-value" id="blockers">0</div>
+                    <div class="metric-label">Blockers</div>
+                </div>
+                <div class="metric-card warning">
+                    <div class="metric-value" id="critical">0</div>
+                    <div class="metric-label">Critical</div>
+                </div>
+                <div class="metric-card warning">
+                    <div class="metric-value" id="unassigned">0</div>
+                    <div class="metric-label">Unassigned</div>
+                </div>
+            </div>
+
+            <div id="loading" class="loading">Loading dashboard data...</div>
+            <div id="projects" style="display: none;"></div>
+
+            <script>
+                const JIRA_BASE = 'https://docupacellc.atlassian.net';
+                const FILTERS = {
+                    rock: '17589',
+                    sei: '17590',
+                    surveillance: '17591'
+                };
+
+                let dashboardData = {};
+
+                // Make JSONP request to bypass CORS
+                function fetchJiraData(filterId, callback) {
+                    const script = document.createElement('script');
+                    const callbackName = 'jiraCallback_' + Date.now();
+                    
+                    window[callbackName] = function(data) {
+                        callback(data);
+                        delete window[callbackName];
+                        document.body.removeChild(script);
+                    };
+                    
+                    // Use Jira's REST API with JSONP
+                    script.src = `${JIRA_BASE}/rest/api/2/search?jql=filter=${filterId}&fields=key,summary,status,priority,assignee,duedate&maxResults=100&callback=${callbackName}`;
+                    document.body.appendChild(script);
+                }
+
+                // Alternative: Use gadgets.io.makeRequest for Atlassian gadgets
+                function loadDashboard() {
+                    document.getElementById('loading').style.display = 'block';
+                    document.getElementById('projects').style.display = 'none';
+                    
+                    const promises = [];
+                    
+                    Object.entries(FILTERS).forEach(([project, filterId]) => {
+                        const promise = new Promise((resolve) => {
+                            const params = {};
+                            params[gadgets.io.RequestParameters.CONTENT_TYPE] = gadgets.io.ContentType.JSON;
+                            params[gadgets.io.RequestParameters.METHOD] = gadgets.io.MethodType.POST;
+                            params[gadgets.io.RequestParameters.POST_DATA] = JSON.stringify({
+                                jql: `filter=${filterId}`,
+                                fields: ['key', 'summary', 'status', 'priority', 'assignee', 'duedate'],
+                                maxResults: 100
+                            });
+                            
+                            const url = `${JIRA_BASE}/rest/api/2/search`;
+                            
+                            gadgets.io.makeRequest(url, function(response) {
+                                if (response.data) {
+                                    dashboardData[project] = response.data;
+                                }
+                                resolve();
+                            }, params);
+                        });
+                        promises.push(promise);
+                    });
+                    
+                    Promise.all(promises).then(() => {
+                        renderDashboard();
+                        document.getElementById('loading').style.display = 'none';
+                        document.getElementById('projects').style.display = 'block';
+                        gadgets.window.adjustHeight();
+                    });
+                }
+
+                function renderDashboard() {
+                    const filter = document.getElementById('filter').value;
+                    let metrics = { total: 0, blockers: 0, critical: 0, unassigned: 0 };
+                    let alerts = [];
+                    
+                    Object.entries(dashboardData).forEach(([project, data]) => {
+                        if (filter !== 'all' && filter !== project) return;
+                        
+                        metrics.total += data.total || 0;
+                        
+                        (data.issues || []).forEach(issue => {
+                            const priority = issue.fields.priority?.name;
+                            if (priority === 'Blocker') {
+                                metrics.blockers++;
+                                alerts.push({ 
+                                    key: issue.key, 
+                                    summary: issue.fields.summary,
+                                    type: 'BLOCKER'
+                                });
+                            }
+                            if (priority === 'Critical') {
+                                metrics.critical++;
+                                if (!issue.fields.assignee) {
+                                    metrics.unassigned++;
+                                    alerts.push({
+                                        key: issue.key,
+                                        summary: issue.fields.summary,
+                                        type: 'UNASSIGNED CRITICAL'
+                                    });
+                                }
+                            }
+                        });
+                    });
+                    
+                    // Update metrics
+                    document.getElementById('total').textContent = metrics.total;
+                    document.getElementById('blockers').textContent = metrics.blockers;
+                    document.getElementById('critical').textContent = metrics.critical;
+                    document.getElementById('unassigned').textContent = metrics.unassigned;
+                    
+                    // Show alerts
+                    if (alerts.length > 0) {
+                        document.getElementById('alerts').style.display = 'block';
+                        document.getElementById('alert-list').innerHTML = alerts.slice(0, 5).map(a => 
+                            `<div style="margin: 4px 0;">
+                                <a href="${JIRA_BASE}/browse/${a.key}" target="_blank" class="issue-key">${a.key}</a>
+                                <span style="color: #ff5630; font-weight: bold; margin-left: 8px;">${a.type}</span>
+                                <div style="font-size: 12px; color: #42526e;">${a.summary}</div>
+                            </div>`
+                        ).join('');
+                    }
+                    
+                    // Render projects
+                    renderProjects(filter);
+                }
+
+                function renderProjects(filter) {
+                    const container = document.getElementById('projects');
+                    container.innerHTML = '';
+                    
+                    const projectNames = {
+                        rock: 'ROCK (Phase 1 & 2)',
+                        sei: 'SEI Global Services',
+                        surveillance: 'Surveillance (C&C Team)'
+                    };
+                    
+                    Object.entries(dashboardData).forEach(([project, data]) => {
+                        if (filter !== 'all' && filter !== project) return;
+                        
+                        const section = document.createElement('div');
+                        section.className = 'project-section';
+                        section.innerHTML = `
+                            <div class="project-header">
+                                <span>${projectNames[project]}</span>
+                                <span style="color: #6b778c; font-weight: normal;">${data.total || 0} tickets</span>
+                            </div>
+                            <table class="issue-table">
+                                <thead>
+                                    <tr>
+                                        <th>Key</th>
+                                        <th>Summary</th>
+                                        <th>Priority</th>
+                                        <th>Status</th>
+                                        <th>Assignee</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${(data.issues || []).slice(0, 10).map(issue => `
+                                        <tr>
+                                            <td><a href="${JIRA_BASE}/browse/${issue.key}" target="_blank" class="issue-key">${issue.key}</a></td>
+                                            <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">${issue.fields.summary}</td>
+                                            <td><span class="priority priority-${(issue.fields.priority?.name || 'minor').toLowerCase()}">${issue.fields.priority?.name || 'None'}</span></td>
+                                            <td><span class="status status-${getStatusClass(issue.fields.status?.name)}">${issue.fields.status?.name || 'Unknown'}</span></td>
+                                            <td>${issue.fields.assignee?.displayName || '<span style="color: #ff5630;">Unassigned</span>'}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        `;
+                        container.appendChild(section);
+                    });
+                }
+
+                function getStatusClass(status) {
+                    if (!status) return 'open';
+                    const s = status.toLowerCase();
+                    if (s.includes('done') || s.includes('closed')) return 'done';
+                    if (s.includes('progress')) return 'progress';
+                    return 'open';
+                }
+
+                // Initialize on load
+                document.addEventListener('DOMContentLoaded', function() {
+                    if (typeof gadgets !== 'undefined') {
+                        gadgets.util.registerOnLoadHandler(loadDashboard);
+                    } else {
+                        // Fallback for testing
+                        console.log('Gadgets API not available - running in test mode');
+                        loadDashboard();
+                    }
+                });
+
+                // Filter change handler
+                document.getElementById('filter').addEventListener('change', renderDashboard);
+            </script>
+        </body>
+        </html>
+    ]]>
+    </Content>
+</Module>
